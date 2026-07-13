@@ -85,4 +85,3 @@ payload 字段与状态语义是签发方与产品方的**长期契约**：v0.x 
 | `ActivationCode` | 离线激活申请码 |
 | `ParsePublicKey` | 解析签发方发布的 base64 公钥 |
 
-签发服务与完整设计见 OpenBKN license-server（私有仓库）。
