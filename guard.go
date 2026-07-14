@@ -26,7 +26,7 @@ import (
 //	    Keys: keys,
 //	    Load: func() (string, error) { return os.ReadFileString(licPath) },
 //	    Store: func(t string) error { return os.WriteFile(licPath, []byte(t), 0o600) },
-//	    RenewURL: "https://license.example.com/api/licenses/renew",
+//	    RenewURL: "https://license.openbkn.ai/api/licenses/renew",
 //	    OnChange: func(old, new licverify.Snapshot) { gate.Apply(new) },
 //	})
 //	go guard.Run(ctx)
