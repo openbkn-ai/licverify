@@ -10,13 +10,13 @@ go get github.com/openbkn-ai/licverify
 ## 用法
 
 ```go
-import "github.com/openbkn-ai/licverify"
-
-// 验签公钥编译期内置（来自签发方发布的 kid → base64 公钥）
-keys := map[string]ed25519.PublicKey{"2026-07": pub}
+import (
+    "github.com/openbkn-ai/licverify"
+    "github.com/openbkn-ai/licverify/keys"   // 官方验签公钥表（单一来源）
+)
 
 // 四态门控判定：有效 / 宽限（功能保持）/ 回落社区（曾授权）/ 无效
-state, p := licverify.Eval(licenseText, keys)
+state, p := licverify.Eval(licenseText, keys.Official())
 
 // 机器码 + 激活绑定自校验：复制来的 license 离线即拒
 localFP, _ := licverify.Fingerprint()
