@@ -60,7 +60,7 @@ identity 按优先级：`OPENBKN_INSTANCE_ID` 环境变量 → machine-id（Linu
 | 单机 Docker | 挂载 `-v /etc/machine-id:/etc/machine-id:ro` | 这台主机（与主机一致） |
 | K8s | `OPENBKN_INSTANCE_ID` = 集群稳定标识 | 这套集群 |
 
-离线激活：`ActivationCode(licID, fp)` 生成申请码 → 客户门户兑换绑定指纹的回执 license。
+离线激活：把 `Fingerprint()` 的设备指纹（`fp_…`）粘贴到客户门户 → 兑换绑定指纹的激活证书（新 `.lic`）。
 
 ## 安全模型
 
@@ -82,6 +82,5 @@ payload 字段与状态语义是签发方与产品方的**长期契约**：v0.x 
 | `Eval` | 四态门控判定（valid / grace / fallback_community / invalid） |
 | `Fingerprint / FingerprintFrom` | 本机 / 自定义身份的实例指纹 |
 | `VerifyBound` | license 绑定指纹 = 本机指纹自校验 |
-| `ActivationCode` | 离线激活申请码 |
 | `ParsePublicKey` | 解析签发方发布的 base64 公钥 |
 

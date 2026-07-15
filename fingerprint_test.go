@@ -1,8 +1,6 @@
 package licverify
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"regexp"
 	"testing"
@@ -59,20 +57,5 @@ func TestVerifyBound(t *testing.T) {
 	}
 	if err := VerifyBound(&Payload{HWFingerprint: "fp_other"}, "fp_local"); !errors.Is(err, ErrFingerprintMismatch) {
 		t.Error("copied license must be rejected")
-	}
-}
-
-func TestActivationCodeRoundtrip(t *testing.T) {
-	code := ActivationCode("lic-1", "fp_abc")
-	raw, err := base64.RawURLEncoding.DecodeString(code)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var m map[string]string
-	if err := json.Unmarshal(raw, &m); err != nil {
-		t.Fatal(err)
-	}
-	if m["lic_id"] != "lic-1" || m["instance_fp"] != "fp_abc" {
-		t.Errorf("roundtrip: %v", m)
 	}
 }

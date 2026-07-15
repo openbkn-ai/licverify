@@ -2,9 +2,7 @@ package licverify
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -16,7 +14,7 @@ import (
 	"strings"
 )
 
-// Instance fingerprinting (机器码) for one-shot activation binding.
+// Instance fingerprinting (设备指纹) for one-shot activation binding.
 //
 // The algorithm is deliberately public: anti-copy enforcement does not rest
 // on its secrecy but on the server side (first-wins activation, renewal
@@ -78,14 +76,10 @@ func VerifyBound(p *Payload, localFP string) error {
 	return ErrFingerprintMismatch
 }
 
-// ActivationCode builds the offline activation request code the customer
-// pastes into the license portal (which returns the signed, bound receipt
-// license). licID may be empty; the portal then binds the license the code
-// is submitted against.
-func ActivationCode(licID, fp string) string {
-	b, _ := json.Marshal(map[string]string{"lic_id": licID, "instance_fp": fp})
-	return base64.RawURLEncoding.EncodeToString(b)
-}
+// The base64 "activation code" wrapper (ActivationCode) was retired
+// 2026-07-15: the offline flow pastes the raw device fingerprint from
+// Fingerprint() into the license portal directly, and the portal no longer
+// accepts the wrapped form.
 
 func machineID() (string, error) {
 	switch runtime.GOOS {
