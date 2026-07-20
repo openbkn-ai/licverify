@@ -153,3 +153,25 @@ func splitSig(text string) string {
 	}
 	return ""
 }
+
+func TestTrialWindow(t *testing.T) {
+	now := time.Now()
+	start := now.Add(-10 * 24 * time.Hour).Unix()
+
+	if got := TrialAt(start, now); got != StateTrial {
+		t.Errorf("10 days in: got %s, want %s", got, StateTrial)
+	}
+	if got := TrialAt(now.Add(-31*24*time.Hour).Unix(), now); got != StateUnlicensed {
+		t.Errorf("31 days in: got %s, want %s", got, StateUnlicensed)
+	}
+	// An unrecorded first run must not read as an elapsed trial.
+	if got := TrialAt(0, now); got != StateTrial {
+		t.Errorf("unknown first run: got %s, want %s", got, StateTrial)
+	}
+	if d := TrialRemaining(start, now); d < 19*24*time.Hour || d > 20*24*time.Hour {
+		t.Errorf("remaining: got %v, want ~20d", d)
+	}
+	if d := TrialRemaining(now.Add(-40*24*time.Hour).Unix(), now); d != 0 {
+		t.Errorf("elapsed remaining: got %v, want 0", d)
+	}
+}

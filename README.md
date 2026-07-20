@@ -15,8 +15,12 @@ import (
     "github.com/openbkn-ai/licverify/keys"   // 官方验签公钥表（单一来源）
 )
 
-// 四态门控判定：有效 / 宽限（功能保持）/ 回落社区（曾授权）/ 无效
+// 门控判定：有效 / 宽限（功能保持）/ 回落社区（曾授权）/ 无效
 state, p := licverify.Eval(licenseText, keys.Official())
+
+// 无证时（全新安装）：试用窗口内静默，之后转为常驻激活提示。
+// 两者都跑社区能力集——从不因未激活而收走功能。
+state = licverify.TrialAt(firstRunUnix, time.Now())   // StateTrial / StateUnlicensed
 
 // 机器码 + 激活绑定自校验：复制来的 license 离线即拒
 localFP, _ := licverify.Fingerprint()
@@ -79,7 +83,8 @@ payload 字段与状态语义是签发方与产品方的**长期契约**：v0.x 
 |---|---|
 | `Verify / VerifyAt` | 验签 + 有效期检查，返回 payload |
 | `Parse` | 只验签不查有效期（判定"曾授权"用） |
-| `Eval` | 四态门控判定（valid / grace / fallback_community / invalid） |
+| `Eval` | 持证判定（valid / grace / fallback_community / invalid） |
+| `TrialAt / TrialRemaining` | 无证判定（trial / unlicensed）与剩余试用时长 |
 | `Fingerprint / FingerprintFrom` | 本机 / 自定义身份的实例指纹 |
 | `VerifyBound` | license 绑定指纹 = 本机指纹自校验 |
 | `ParsePublicKey` | 解析签发方发布的 base64 公钥 |

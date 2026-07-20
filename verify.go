@@ -111,8 +111,45 @@ const (
 	// feature set, keeping data readable and exportable.
 	StateFallback State = "fallback_community"
 	// StateInvalid: malformed, bad signature, unknown key, or not yet valid.
+	// The product still runs on the community feature set — a bad file is no
+	// reason to withhold what is free anyway — but should say the license file
+	// could not be verified rather than nag for activation.
 	StateInvalid State = "invalid"
+	// StateTrial: no license imported yet, within TrialPeriod of first run.
+	// Community feature set, quietly; the product may show days remaining.
+	StateTrial State = "trial"
+	// StateUnlicensed: no license, trial window elapsed. Still the community
+	// feature set — nothing is ever withheld — with a persistent prompt to
+	// activate.
+	StateUnlicensed State = "unlicensed"
 )
+
+// TrialPeriod is how long a fresh, never-licensed deployment runs before the
+// activation prompt turns persistent. Nothing is disabled when it elapses.
+const TrialPeriod = 30 * 24 * time.Hour
+
+// TrialAt judges a deployment that holds no license, from the first-run
+// timestamp the product persisted (unix seconds; <= 0 means "starting now").
+// Trial state is deliberately local and resettable: it exists to give new
+// installs a quiet grace before nagging, not to gate anything. Nothing about
+// the feature set depends on it, so there is nothing to defend.
+func TrialAt(firstRun int64, now time.Time) State {
+	if firstRun <= 0 || now.Sub(time.Unix(firstRun, 0)) < TrialPeriod {
+		return StateTrial
+	}
+	return StateUnlicensed
+}
+
+// TrialRemaining is how much of the trial window is left (0 once elapsed).
+func TrialRemaining(firstRun int64, now time.Time) time.Duration {
+	if firstRun <= 0 {
+		return TrialPeriod
+	}
+	if d := TrialPeriod - now.Sub(time.Unix(firstRun, 0)); d > 0 {
+		return d
+	}
+	return 0
+}
 
 // Eval judges a license file for gating decisions: valid / grace /
 // fallback-to-community / invalid. Unlike Verify it never returns an error

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -46,6 +47,11 @@ type GuardConfig struct {
 	RenewURL string
 	// InstanceFP defaults to Fingerprint() of this machine.
 	InstanceFP string
+	// FirstRun returns the unix timestamp this deployment first started,
+	// persisted by the product (create it on first call). It only drives the
+	// trial-vs-unlicensed distinction while NO license is held — nothing is
+	// gated on it. Nil (or 0) means "starting now", i.e. always StateTrial.
+	FirstRun func() int64
 	// Interval between re-evaluations. Default 1h; ±10% jitter is applied.
 	Interval time.Duration
 	// OnChange fires on every state transition (not on steady state).
@@ -164,11 +170,17 @@ func (g *Guard) Run(ctx context.Context) {
 func (g *Guard) evalOnce(now time.Time, allowRenew bool) Snapshot {
 	text, err := g.cfg.Load()
 	if err != nil {
-		return Snapshot{State: StateInvalid, Err: fmt.Errorf("licverify: load license: %w", err)}
+		return Snapshot{State: g.trialState(now), Err: fmt.Errorf("licverify: load license: %w", err)}
+	}
+	// No license at all is the ordinary state of a fresh install, not a fault:
+	// the product runs the community feature set either way, and the only
+	// question is whether to nag yet.
+	if strings.TrimSpace(text) == "" {
+		return Snapshot{State: g.trialState(now)}
 	}
 	state, p := EvalAt(text, g.cfg.Keys, now)
 	if state == StateInvalid {
-		return Snapshot{State: StateInvalid, Err: errors.New("licverify: license missing, malformed, or signature invalid")}
+		return Snapshot{State: StateInvalid, Err: errors.New("licverify: license malformed, or signature invalid")}
 	}
 	if err := VerifyBound(p, g.cfg.InstanceFP); err != nil {
 		return Snapshot{State: StateInvalid, Err: err}
@@ -194,6 +206,17 @@ func (g *Guard) evalOnce(now time.Time, allowRenew bool) Snapshot {
 		return Snapshot{State: freshState, Payload: freshP}
 	}
 	return Snapshot{State: state, Payload: p}
+}
+
+// trialState judges a deployment holding no license: quiet while the trial
+// window lasts, then a standing prompt to activate. Neither state withholds
+// anything — the community feature set runs regardless.
+func (g *Guard) trialState(now time.Time) State {
+	var firstRun int64
+	if g.cfg.FirstRun != nil {
+		firstRun = g.cfg.FirstRun()
+	}
+	return TrialAt(firstRun, now)
 }
 
 // shouldRenew: online deployments renew inside the last third of the
