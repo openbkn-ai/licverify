@@ -17,7 +17,7 @@ import (
 type Payload struct {
 	LicID    string   `json:"lic_id"`
 	Kid      string   `json:"kid"`
-	Edition  string   `json:"edition"`
+	Edition  Edition  `json:"edition"`
 	Customer Customer `json:"customer"`
 	IssuedAt int64    `json:"issued_at"`
 	// ExpiresAt is the technical validity of this single license (the only
