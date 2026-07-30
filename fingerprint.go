@@ -23,14 +23,20 @@ import (
 // salted hash does.
 //
 // Source precedence:
-//  1. OPENBKN_INSTANCE_ID env — for clusters/containers, inject a stable
-//     identity (e.g. the kube-system namespace UID) via deployment config.
+//  1. OPENBKN_INSTANCE_ID env — for clusters/containers, where no host
+//     identity is visible inside the container. The value MUST be derived
+//     from the host by the installer (DMI product_uuid, or the host
+//     machine-id) so that re-running the installer on the same host yields
+//     the same value. NEVER generate a random UUID and persist it: a
+//     generated identity drifts when its storage is lost and travels when
+//     the deployment config is copied.
 //  2. OS machine id — /etc/machine-id (Linux), IOPlatformUUID (macOS),
 //     MachineGuid (Windows). Stable across reboots and reinstalls of the
 //     product; survives NIC/disk changes.
-//  3. Physical MAC addresses (sorted) — last resort when no machine id
-//     exists (minimal containers). Legitimate hardware changes that shift
-//     the fingerprint are handled by the admin unbind flow, not by fuzzy
+//  3. Burned-in MAC addresses (sorted) — last resort when no machine id
+//     exists (minimal containers). Software-assigned addresses are refused
+//     (see durableMAC). Legitimate hardware changes that shift the
+//     fingerprint are handled by the admin unbind flow, not by fuzzy
 //     matching.
 
 // EnvInstanceID overrides all hardware sources when set.
@@ -118,8 +124,8 @@ func machineID() (string, error) {
 	}
 }
 
-// physicalMACs returns non-loopback, non-virtual hardware addresses, sorted
-// for determinism.
+// physicalMACs returns non-loopback, burned-in hardware addresses, sorted for
+// determinism.
 func physicalMACs() []string {
 	ifaces, err := net.Interfaces()
 	if err != nil {
@@ -127,18 +133,47 @@ func physicalMACs() []string {
 	}
 	var macs []string
 	for _, i := range ifaces {
-		if i.Flags&net.FlagLoopback != 0 || len(i.HardwareAddr) == 0 {
-			continue
-		}
-		name := strings.ToLower(i.Name)
-		// Skip common virtual/ephemeral interfaces.
-		if strings.HasPrefix(name, "veth") || strings.HasPrefix(name, "docker") ||
-			strings.HasPrefix(name, "br-") || strings.HasPrefix(name, "virbr") ||
-			strings.HasPrefix(name, "utun") || strings.HasPrefix(name, "awdl") {
+		if i.Flags&net.FlagLoopback != 0 || !durableMAC(i.Name, i.HardwareAddr) {
 			continue
 		}
 		macs = append(macs, i.HardwareAddr.String())
 	}
 	sort.Strings(macs)
 	return macs
+}
+
+// durableMAC reports whether an address is stable enough to derive an instance
+// identity from.
+//
+// A container's eth0, a veth peer, a bridge or a hypervisor tap all carry
+// locally administered addresses minted at Pod/VM start. Hashing one yields a
+// fingerprint that silently changes on the next Pod rebuild, which invalidates
+// an activated license; failing loudly with ErrNoFingerprint beats a plausible
+// value that drifts. Only OUI-assigned (globally administered) addresses count.
+func durableMAC(name string, hw net.HardwareAddr) bool {
+	if len(hw) == 0 {
+		return false
+	}
+	// Bit 0x02 of the first octet: locally administered, i.e. software-assigned.
+	if hw[0]&0x02 != 0 {
+		return false
+	}
+	allZero := true
+	for _, b := range hw {
+		if b != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		return false
+	}
+	// Virtual interfaces that may still carry a globally administered address.
+	n := strings.ToLower(name)
+	for _, p := range []string{"veth", "docker", "br-", "virbr", "utun", "awdl", "tap", "tun"} {
+		if strings.HasPrefix(n, p) {
+			return false
+		}
+	}
+	return true
 }
