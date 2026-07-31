@@ -56,13 +56,22 @@ fp = "fp_" + hex( SHA-256( salt + identity )[:8] )
 ```
 
 identity 按优先级：`OPENBKN_INSTANCE_ID` 环境变量 → machine-id（Linux/macOS/Windows）→
-物理网卡 MAC。算法公开，不靠保密——防复制的强制力在签发服务端（一码一激活 first-wins + 续期校验绑定）。
+出厂烧录的网卡 MAC。算法公开，不靠保密——防复制的强制力在签发服务端（一码一激活 first-wins + 续期校验绑定）。
 
 | 部署形态 | 做法 | 指纹标识什么 |
 |---|---|---|
 | 裸机 / 虚机 | 默认即可（machine-id） | 这台主机 |
 | 单机 Docker | 挂载 `-v /etc/machine-id:/etc/machine-id:ro` | 这台主机（与主机一致） |
-| K8s | `OPENBKN_INSTANCE_ID` = 集群稳定标识 | 这套集群 |
+| K8s | 安装器在宿主上读 `/sys/class/dmi/id/product_uuid`，注入 `OPENBKN_INSTANCE_ID` | 这台宿主机 |
+
+K8s 那条有一个**不可妥协的约束：安装器只能从宿主推导，绝不能随机生成**。
+派生是幂等的（同一台机器跑多少次都是同一个值，升级、重装都自洽）；随机生成的
+UUID 存储丢了就指纹漂移，配置被复制到别的机器又会跟着跑。
+
+MAC 兜底只收出厂烧录（globally administered）的地址。容器 `eth0`、veth、网桥、
+hypervisor tap 用的是启动时临时分配的 locally administered 地址（首字节 `& 0x02`
+置位），拿它算指纹会在 Pod 重建后静默变化、让已激活的证失效——这类地址一律拒绝，
+候选为空时返回 `ErrNoFingerprint`，**宁可启动报错也不给一个会漂的值**。
 
 离线激活：把 `Fingerprint()` 的设备指纹（`fp_…`）粘贴到客户门户 → 兑换绑定指纹的激活证书（新 `.lic`）。
 

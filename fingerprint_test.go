@@ -2,6 +2,7 @@ package licverify
 
 import (
 	"errors"
+	"net"
 	"regexp"
 	"testing"
 )
@@ -45,6 +46,37 @@ func TestFingerprintLocalMachine(t *testing.T) {
 	again, err := Fingerprint()
 	if err != nil || fp != again {
 		t.Errorf("fingerprint must be stable: %s vs %s (%v)", fp, again, err)
+	}
+}
+
+// A Pod's eth0 carries a locally administered address minted at Pod start, so
+// a fingerprint derived from it changes on every Pod rebuild and silently
+// invalidates an activated license.
+func TestDurableMACRejectsEphemeral(t *testing.T) {
+	cases := []struct {
+		name string
+		mac  string
+		want bool
+	}{
+		{"eth0", "c2:2f:a3:86:52:c4", false}, // Kubernetes Pod interface
+		{"eth0", "52:54:00:12:34:56", false}, // KVM/QEMU virtio
+		{"vethabc123", "aa:bb:cc:dd:ee:ff", false},
+		{"docker0", "02:42:ac:11:00:02", false},
+		{"eth0", "00:00:00:00:00:00", false},
+		{"eno1", "00:1a:2b:3c:4d:5e", true}, // OUI-assigned, burned in
+		{"eth0", "3c:22:fb:01:02:03", true}, // minimal container on bare metal
+	}
+	for _, c := range cases {
+		hw, err := net.ParseMAC(c.mac)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := durableMAC(c.name, hw); got != c.want {
+			t.Errorf("durableMAC(%q, %s) = %v, want %v", c.name, c.mac, got, c.want)
+		}
+	}
+	if durableMAC("eth0", nil) {
+		t.Error("interface without an address must be refused")
 	}
 }
 
